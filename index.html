@@ -503,12 +503,12 @@
         Continue with Google
       </button>
     </div>
-    <div style="margin-top:18px;padding:13px;background:rgba(245,197,24,.06);border:1px solid rgba(245,197,24,.2);border-radius:10px;font-size:.78rem;color:var(--text2);line-height:1.7;">
-      <div style="font-weight:700;color:var(--accent);margin-bottom:6px;"><i class="fas fa-info-circle"></i> Google Login কাজ না করলে:</div>
-      <div>Firebase Console → Authentication → <b style="color:var(--text)">Sign-in method → Google → Enable</b> করুন<br>
-      তারপর <b style="color:var(--text)">Settings → Authorized Domains</b> এ আপনার domain add করুন।</div>
-      <button onclick="showDomainSetupModal()" style="margin-top:8px;background:var(--accent);color:#000;border:none;padding:6px 14px;border-radius:50px;font-size:.75rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
-        <i class="fas fa-tools"></i> Step-by-step Setup Guide
+    <div style="margin-top:18px;padding:13px;background:rgba(245,197,24,.06);border:1px solid rgba(245,197,24,.2);border-radius:10px;font-size:.78rem;color:var(--text2);line-height:1.75;">
+      <div style="font-weight:700;color:var(--accent);margin-bottom:7px;"><i class="fas fa-exclamation-circle"></i> Google Login এর জন্য Firebase Console এ ২টি কাজ:</div>
+      <div style="margin-bottom:4px;">① Authentication → Sign-in method → <b style="color:var(--text)">Google → Enable</b></div>
+      <div>② Authentication → Settings → Authorized domains → <b style="color:var(--text)">film-hub-oq5u.vercel.app Add করুন</b></div>
+      <button onclick="showDomainSetupModal()" style="margin-top:10px;background:var(--accent);color:#000;border:none;padding:7px 16px;border-radius:50px;font-size:.75rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;width:100%;justify-content:center;">
+        <i class="fas fa-tools"></i> Step-by-step Setup Guide দেখুন
       </button>
     </div>
   </div>
@@ -686,7 +686,16 @@ import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-ap
 import{getAuth,signInWithEmailAndPassword,createUserWithEmailAndPassword,signOut,onAuthStateChanged,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirectResult,updateProfile}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import{getFirestore,collection,doc,getDocs,getDoc,setDoc,deleteDoc,updateDoc,query,where,orderBy,limit,serverTimestamp,increment}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-const FC={apiKey:"AIzaSyAlP6oiJcGzsiVfHAtShg-uegs2FVR4un0",authDomain:"play-movies-1xc8r2m.firebaseapp.com",projectId:"play-movies-1xc8r2m",storageBucket:"play-movies-1xc8r2m.firebasestorage.app",messagingSenderId:"913452236238",appId:"1:913452236238:web:f2dbb27420114536a17f9f"};
+const FC={
+  apiKey:"AIzaSyAlP6oiJcGzsiVfHAtShg-uegs2FVR4un0",
+  /* authDomain অবশ্যই আপনার actual domain হতে হবে
+     Vercel এ "Failed to fetch" এর এটাই মূল কারণ */
+  authDomain:"film-hub-oq5u.vercel.app",
+  projectId:"play-movies-1xc8r2m",
+  storageBucket:"play-movies-1xc8r2m.firebasestorage.app",
+  messagingSenderId:"913452236238",
+  appId:"1:913452236238:web:f2dbb27420114536a17f9f"
+};
 const app=initializeApp(FC),auth=getAuth(app),db=getFirestore(app);
 const gp=new GoogleAuthProvider();
 gp.addScope('email');gp.addScope('profile');gp.setCustomParameters({prompt:'select_account'});
@@ -803,65 +812,62 @@ window.doSignup=async function(){
 };
 
 window.doGoogleLogin=async function(){
-  /* file:// protocol এ কখনো কাজ করবে না */
   if(location.protocol==='file:'){showDomainSetupModal();return;}
 
   const b1=document.getElementById('google-btn-1'),b2=document.getElementById('google-btn-2');
-  const sp='<i class="fas fa-spinner fa-spin"></i> অপেক্ষা করুন...';
-  const og='<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" style="width:19px;height:19px" alt="G" /> Continue with Google';
-  [b1,b2].forEach(b=>{if(b){b.disabled=true;b.innerHTML=sp;}});
-  const rst=()=>[b1,b2].forEach(b=>{if(b){b.disabled=false;b.innerHTML=og;}});
+  const setBtn=(html,dis)=>[b1,b2].forEach(b=>{if(b){b.disabled=dis;b.innerHTML=html;}});
+  const ORIG='<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" style="width:19px;height:19px" alt="G" /> Continue with Google';
+
+  setBtn('<i class="fas fa-spinner fa-spin"></i> Google এ যাচ্ছে...',true);
 
   try{
-    /* Popup দিয়ে চেষ্টা */
+    /* প্রথমে Popup চেষ্টা — সফল হলে সাথে সাথে login */
     const result=await signInWithPopup(auth,gp);
-    const u=result.user;
-    /* Firestore এ user save (error হলেও login সফল) */
     try{
-      await setDoc(doc(db,'users',u.uid),{
-        uid:u.uid, name:u.displayName||'User',
-        email:u.email, photoURL:u.photoURL||'',
+      await setDoc(doc(db,'users',result.user.uid),{
+        uid:result.user.uid, name:result.user.displayName||'User',
+        email:result.user.email, photoURL:result.user.photoURL||'',
         updatedAt:serverTimestamp()
       },{merge:true});
-    }catch(dbErr){/* non-critical */}
+    }catch(_){}
     showToast('Google Login সফল! 🎬','success');
-    rst();
+    setBtn(ORIG,false);
     navigateTo('home');
 
   }catch(err){
-    rst();
     const code=err.code||'';
 
-    /* Domain Firebase Console এ add করা নেই */
+    /* Domain সমস্যা */
     if(code==='auth/unauthorized-domain'||code==='auth/operation-not-allowed'){
+      setBtn(ORIG,false);
       showDomainSetupModal();
       return;
     }
 
-    /* Popup block বা user নিজে বন্ধ করেছে → Redirect দিয়ে try */
-    if(code==='auth/popup-blocked'||code==='auth/popup-closed-by-user'||code==='auth/cancelled-popup-request'||code==='auth/popup-closed'){
-      showToast('Popup বন্ধ হয়েছে। Redirect এ চেষ্টা করছি...','info');
+    /* Popup block / বন্ধ / fetch fail → Redirect দিয়ে চেষ্টা */
+    if(
+      code==='auth/popup-blocked'||
+      code==='auth/popup-closed-by-user'||
+      code==='auth/cancelled-popup-request'||
+      code==='auth/network-request-failed'||
+      code==='auth/internal-error'||
+      code===''|| /* "Failed to fetch" এর সময় code খালি থাকে */
+      err.message?.includes('fetch')||
+      err.message?.includes('network')
+    ){
+      setBtn('<i class="fas fa-spinner fa-spin"></i> Redirect হচ্ছে...',true);
       try{
         await signInWithRedirect(auth,gp);
-        /* এখানে page reload হবে, getRedirectResult() handle করবে */
+        /* এখানে page redirect হয়ে যাবে */
       }catch(re){
+        setBtn(ORIG,false);
         if(re.code==='auth/unauthorized-domain') showDomainSetupModal();
-        else showToast('Google Login ব্যর্থ হয়েছে। আবার চেষ্টা করুন।','error');
+        else showToast('Google Login ব্যর্থ। আবার চেষ্টা করুন।','error');
       }
       return;
     }
 
-    /* Internal error (মাঝে মাঝে Firebase এই error দেয়) → Redirect fallback */
-    if(code==='auth/internal-error'||code==='auth/web-storage-unsupported'){
-      showToast('Redirect এ চেষ্টা করছি...','info');
-      try{ await signInWithRedirect(auth,gp); }catch(re){ showToast('Google Login ব্যর্থ।','error'); }
-      return;
-    }
-
-    if(code==='auth/network-request-failed'){showToast('Internet সংযোগ সমস্যা। চেক করুন।','error');return;}
-    if(code==='auth/too-many-requests'){showToast('অনেকবার চেষ্টা হয়েছে। একটু পরে আবার try করুন।','error');return;}
-
-    /* অন্য সব error */
+    setBtn(ORIG,false);
     showToast(err.message||'Google Login ব্যর্থ হয়েছে।','error');
   }
 };
@@ -1102,13 +1108,30 @@ window._fb_switchProfileTab=function(tab){
 
 /* INIT */
 window.addEventListener('load',async()=>{
+
+  /* ─── Google Redirect Result Handle করো ─── */
   try{
     const rr=await getRedirectResult(auth);
-    if(rr?.user){
-      try{await setDoc(doc(db,'users',rr.user.uid),{uid:rr.user.uid,name:rr.user.displayName,email:rr.user.email,photoURL:rr.user.photoURL||'',createdAt:serverTimestamp()},{merge:true});}catch(x){}
+    if(rr && rr.user){
+      const u=rr.user;
+      /* Firestore এ user save */
+      try{
+        await setDoc(doc(db,'users',u.uid),{
+          uid:u.uid, name:u.displayName||'User',
+          email:u.email, photoURL:u.photoURL||'',
+          updatedAt:serverTimestamp()
+        },{merge:true});
+      }catch(x){}
       showToast('Google Login সফল! 🎬','success');
+      /* Login এর পরে Home page এ যাও */
+      setTimeout(()=>navigateTo('home'), 300);
     }
-  }catch(e){}
+  }catch(e){
+    /* auth/unauthorized-domain হলে setup guide দেখাও */
+    if(e.code==='auth/unauthorized-domain'||e.code==='auth/operation-not-allowed'){
+      setTimeout(()=>showDomainSetupModal(), 500);
+    }
+  }
 
   await loadFS();
   buildYearFilter();buildSlider();
@@ -1130,4 +1153,4 @@ window.addEventListener('load',async()=>{
 });
 </script>
 </body>
-</html>
+  </html>
